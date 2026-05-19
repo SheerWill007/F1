@@ -1,0 +1,28 @@
+# Frontend
+node_modules/
+.next/
+dist/
+build/
+
+# Python
+venv/
+__pycache__/
+*.py[cod]
+
+# Environment variables
+.env
+.env.local
+
+# Cache
+f1_cache/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

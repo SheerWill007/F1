@@ -18,9 +18,32 @@ fastf1.Cache.enable_cache(cache_dir)
 
 app = FastAPI(title="F1 Dashboard API", version="1.0.0")
 
+# ---------------------------------------------------------------------------
+# CORS — update VERCEL_URL to your actual Vercel deployment URL(s)
+# ---------------------------------------------------------------------------
+origins = [
+    # --- Local development ---
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+
+    # --- Production: replace with your real Vercel URL(s) ---
+    "https://your-app.vercel.app",          # main production URL
+    # "https://your-app-git-main-you.vercel.app",  # git-branch preview URL (optional)
+    # "https://your-custom-domain.com",            # custom domain (optional)
+]
+
+# Alternatively, read allowed origins from an environment variable so you
+# never have to redeploy the backend just to add a new frontend URL:
+#
+#   ALLOWED_ORIGINS="https://your-app.vercel.app,https://your-custom-domain.com"
+#
+_env_origins = os.getenv("ALLOWED_ORIGINS", "")
+if _env_origins:
+    origins += [o.strip() for o in _env_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -75,9 +98,21 @@ def safe_val(val):
     return val
 
 
+_START_TIME = datetime.utcnow()
+
 @app.get("/")
 def root():
     return {"status": "F1 Dashboard API running", "version": "1.0.0"}
+
+
+@app.get("/health")
+def health():
+    uptime_seconds = (datetime.utcnow() - _START_TIME).total_seconds()
+    return {
+        "status": "healthy",
+        "uptime_seconds": uptime_seconds,
+        "cache_dir_exists": os.path.isdir(cache_dir),
+    }
 
 
 @app.get("/api/seasons")

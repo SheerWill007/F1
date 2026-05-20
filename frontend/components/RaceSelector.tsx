@@ -32,54 +32,95 @@ export default function RaceSelector({
   const [seasons, setSeasons] = useState<number[]>([]);
   const [schedule, setSchedule] = useState<Race[]>([]);
   const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [seasonsError, setSeasonsError] = useState(false);
+  const [scheduleError, setScheduleError] = useState(false);
 
-  useEffect(() => {
-    f1API.getSeasons().then((d) => setSeasons(d.seasons.reverse()));
-  }, []);
+  const loadSeasons = () => {
+    setSeasonsError(false);
+    f1API.getSeasons()
+      .then((d) => setSeasons(d.seasons.reverse()))
+      .catch(() => setSeasonsError(true));
+  };
 
-  useEffect(() => {
+  const loadSchedule = (y: number) => {
     setScheduleLoading(true);
-    f1API.getSchedule(year)
+    setScheduleError(false);
+    f1API.getSchedule(y)
       .then((d) => setSchedule(d.races))
+      .catch(() => setScheduleError(true))
       .finally(() => setScheduleLoading(false));
-  }, [year]);
+  };
+
+  useEffect(() => { loadSeasons(); }, []);
+  useEffect(() => { loadSchedule(year); }, [year]);
 
   return (
     <div className="bg-f1-darkgray border border-f1-gray/20 rounded-lg p-4">
       <div className="flex flex-wrap gap-3 items-end">
+
         {/* Season */}
         <div className="space-y-1.5">
           <label className="text-xs text-f1-silver uppercase tracking-widest">Season</label>
-          <select
-            value={year}
-            onChange={(e) => onYearChange(Number(e.target.value))}
-            className="bg-f1-black border border-f1-gray/30 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-f1-red transition-colors min-w-[90px]"
-          >
-            {seasons.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
+          {seasonsError ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-f1-red">Failed to load</span>
+              <button
+                onClick={loadSeasons}
+                className="text-xs text-f1-silver hover:text-white underline underline-offset-2"
+              >
+                Retry
+              </button>
+            </div>
+          ) : (
+            <select
+              value={year}
+              onChange={(e) => onYearChange(Number(e.target.value))}
+              disabled={seasons.length === 0}
+              className="bg-f1-black border border-f1-gray/30 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-f1-red transition-colors min-w-[90px] disabled:opacity-50"
+            >
+              {seasons.length === 0 && (
+                <option value="">Loading...</option>
+              )}
+              {seasons.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Race */}
         <div className="space-y-1.5 flex-1 min-w-[200px]">
           <label className="text-xs text-f1-silver uppercase tracking-widest">Grand Prix</label>
-          <select
-            value={race?.round ?? ''}
-            onChange={(e) => {
-              const r = schedule.find((s) => s.round === Number(e.target.value));
-              if (r) onRaceChange(r);
-            }}
-            disabled={scheduleLoading}
-            className="w-full bg-f1-black border border-f1-gray/30 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-f1-red transition-colors disabled:opacity-50"
-          >
-            <option value="">{scheduleLoading ? 'Loading...' : '— Select Race —'}</option>
-            {schedule.map((r) => (
-              <option key={r.round} value={r.round}>
-                R{r.round} · {r.name}
+          {scheduleError ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-f1-red">Failed to load races</span>
+              <button
+                onClick={() => loadSchedule(year)}
+                className="text-xs text-f1-silver hover:text-white underline underline-offset-2"
+              >
+                Retry
+              </button>
+            </div>
+          ) : (
+            <select
+              value={race?.round ?? ''}
+              onChange={(e) => {
+                const r = schedule.find((s) => s.round === Number(e.target.value));
+                if (r) onRaceChange(r);
+              }}
+              disabled={scheduleLoading}
+              className="w-full bg-f1-black border border-f1-gray/30 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-f1-red transition-colors disabled:opacity-50"
+            >
+              <option value="">
+                {scheduleLoading ? 'Loading...' : '— Select Race —'}
               </option>
-            ))}
-          </select>
+              {schedule.map((r) => (
+                <option key={r.round} value={r.round}>
+                  R{r.round} · {r.name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Session Type */}
@@ -90,11 +131,10 @@ export default function RaceSelector({
               <button
                 key={s.value}
                 onClick={() => onSessionChange(s.value)}
-                className={`px-3 py-2 text-xs font-bold rounded border transition-all ${
-                  sessionType === s.value
+                className={`px-3 py-2 text-xs font-bold rounded border transition-all ${sessionType === s.value
                     ? 'bg-f1-red border-f1-red text-white'
                     : 'bg-f1-black border-f1-gray/30 text-f1-silver hover:border-f1-gray hover:text-white'
-                }`}
+                  }`}
               >
                 {s.label}
               </button>
@@ -119,12 +159,27 @@ export default function RaceSelector({
         </button>
       </div>
 
+      {/* Race info strip */}
       {race && (
         <div className="mt-3 pt-3 border-t border-f1-gray/20 flex items-center gap-3 text-xs text-f1-silver">
           <span>📍 {race.location}, {race.country}</span>
           <span>·</span>
           <span>📅 {race.date}</span>
-          {race.format && <><span>·</span><span className="capitalize">{race.format.replace(/_/g, ' ')}</span></>}
+          {race.format && (
+            <>
+              <span>·</span>
+              <span className="capitalize">{race.format.replace(/_/g, ' ')}</span>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* CORS / backend connectivity warning */}
+      {(seasonsError || scheduleError) && (
+        <div className="mt-3 pt-3 border-t border-f1-gray/20">
+          <p className="text-xs text-f1-red">
+            ⚠ Cannot reach the backend. If this is a fresh deploy, the server may be cold-starting — wait 30s and retry.
+          </p>
         </div>
       )}
     </div>

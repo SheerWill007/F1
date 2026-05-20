@@ -26,10 +26,9 @@ origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 
-    # --- Production: replace with your real Vercel URL(s) ---
-    "https://your-app.vercel.app",          # main production URL
-    # "https://your-app-git-main-you.vercel.app",  # git-branch preview URL (optional)
-    # "https://your-custom-domain.com",            # custom domain (optional)
+    # --- Production Vercel URLs ---
+    "https://slipstreams-f1.vercel.app",
+    "https://f1-git-main-williamtecumsehs​herman007-7520s-projects.vercel.app",
 ]
 
 # Alternatively, read allowed origins from an environment variable so you

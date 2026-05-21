@@ -124,7 +124,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   </div>
                   <div className="flex items-center gap-4">
                     <span className="text-f1-gray">|</span>
-                    <span>© 2024 F1 Race Analysis</span>
+                    <span>© Made By WilliamBenLaw [AmanLaw] for all the F1 fans out there!</span>
                   </div>
                 </div>
               </div>

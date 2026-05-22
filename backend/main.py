@@ -9,33 +9,36 @@ from typing import Optional, List
 from datetime import datetime
 import os
 import warnings
+import traceback
+import logging
+
 warnings.filterwarnings('ignore')
 
-# Enable FastF1 cache
-cache_dir = "./f1_cache"
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# FastF1 cache — /tmp is the correct writable path on Render
+# ---------------------------------------------------------------------------
+cache_dir = "/tmp/fastf1"
 os.makedirs(cache_dir, exist_ok=True)
 fastf1.Cache.enable_cache(cache_dir)
 
 app = FastAPI(title="F1 Dashboard API", version="1.0.0")
 
 # ---------------------------------------------------------------------------
-# CORS — update VERCEL_URL to your actual Vercel deployment URL(s)
+# CORS
 # ---------------------------------------------------------------------------
 origins = [
-    # --- Local development ---
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-
-    # --- Production Vercel URLs ---
     "https://slipstreams-f1.vercel.app",
     "https://f1-git-main-williamtecumsehs​herman007-7520s-projects.vercel.app",
 ]
 
-# Alternatively, read allowed origins from an environment variable so you
-# never have to redeploy the backend just to add a new frontend URL:
-#
-#   ALLOWED_ORIGINS="https://your-app.vercel.app,https://your-custom-domain.com"
-#
 _env_origins = os.getenv("ALLOWED_ORIGINS", "")
 if _env_origins:
     origins += [o.strip() for o in _env_origins.split(",") if o.strip()]
@@ -48,7 +51,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Official F1 team colors (2024 season)
+# ---------------------------------------------------------------------------
+# Team colors (2024 season)
+# ---------------------------------------------------------------------------
 TEAM_COLORS = {
     "Red Bull Racing": "#3671C6",
     "Ferrari": "#E8002D",
@@ -64,11 +69,13 @@ TEAM_COLORS = {
 
 TEAM_COLOR_FALLBACK = "#FFFFFF"
 
+
 def get_team_color(team_name: str) -> str:
     for key in TEAM_COLORS:
         if key.lower() in team_name.lower() or team_name.lower() in key.lower():
             return TEAM_COLORS[key]
     return TEAM_COLOR_FALLBACK
+
 
 TYRE_COLORS = {
     "SOFT": "#E8002D",
@@ -79,6 +86,7 @@ TYRE_COLORS = {
     "UNKNOWN": "#888888",
     "TEST_UNKNOWN": "#888888",
 }
+
 
 def safe_val(val):
     """Convert numpy/pandas types to Python native types safely."""
@@ -98,6 +106,10 @@ def safe_val(val):
 
 
 _START_TIME = datetime.utcnow()
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
 
 @app.get("/")
 def root():
@@ -139,6 +151,8 @@ def get_schedule(year: int):
             })
         return {"year": year, "races": races}
     except Exception as e:
+        logger.exception(f"get_schedule failed for year={year}: {e}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -164,6 +178,8 @@ def get_session_info(year: int, round_number: int):
             "sessions": sessions,
         }
     except Exception as e:
+        logger.exception(f"get_session_info failed for year={year} round={round_number}: {e}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -179,7 +195,13 @@ def get_lap_positions(year: int, round_number: int, session_type: str = "R"):
         raise HTTPException(status_code=400, detail="Invalid round number")
     try:
         session = fastf1.get_session(year, round_number, session_type)
-        session.load(laps=True, telemetry=False, weather=False, messages=False)
+        session.load(
+            laps=True,
+            telemetry=False,
+            weather=False,
+            messages=False,
+            livedata=False,
+        )
 
         laps = session.laps
         if laps is None or len(laps) == 0:
@@ -201,7 +223,6 @@ def get_lap_positions(year: int, round_number: int, session_type: str = "R"):
                 "color": get_team_color(str(team)),
             }
 
-        # Build lap-by-lap positions
         max_lap = int(laps["LapNumber"].max())
         lap_data = []
 
@@ -230,21 +251,27 @@ def get_lap_positions(year: int, round_number: int, session_type: str = "R"):
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception(f"get_lap_positions failed year={year} round={round_number} session={session_type}: {e}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/race/{year}/{round_number}/tyres")
 def get_tyre_strategy(year: int, round_number: int, session_type: str = "R"):
-    """
-    Return tyre compound and stint data for all drivers.
-    """
+    """Return tyre compound and stint data for all drivers."""
     if year < 1950 or year > datetime.now().year + 1:
         raise HTTPException(status_code=400, detail="Invalid year")
     if round_number < 1 or round_number > 30:
         raise HTTPException(status_code=400, detail="Invalid round number")
     try:
         session = fastf1.get_session(year, round_number, session_type)
-        session.load(laps=True, telemetry=False, weather=False, messages=False)
+        session.load(
+            laps=True,
+            telemetry=False,
+            weather=False,
+            messages=False,
+            livedata=False,
+        )
 
         laps = session.laps
         if laps is None or len(laps) == 0:
@@ -259,7 +286,6 @@ def get_tyre_strategy(year: int, round_number: int, session_type: str = "R"):
 
             stints = []
             stint_data = []
-
             prev_compound = None
             stint_start = None
 
@@ -329,6 +355,8 @@ def get_tyre_strategy(year: int, round_number: int, session_type: str = "R"):
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception(f"get_tyre_strategy failed year={year} round={round_number} session={session_type}: {e}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -341,7 +369,14 @@ def get_race_results(year: int, round_number: int, session_type: str = "R"):
         raise HTTPException(status_code=400, detail="Invalid round number")
     try:
         session = fastf1.get_session(year, round_number, session_type)
-        session.load(laps=False, telemetry=False, weather=False, messages=False)
+        # Do NOT pass laps=False — omitting laps lets FastF1 load session
+        # metadata (results, driver info) without fetching full lap data.
+        session.load(
+            telemetry=False,
+            weather=False,
+            messages=False,
+            livedata=False,
+        )
 
         results = session.results
         if results is None or len(results) == 0:
@@ -374,4 +409,6 @@ def get_race_results(year: int, round_number: int, session_type: str = "R"):
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception(f"get_race_results failed year={year} round={round_number} session={session_type}: {e}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

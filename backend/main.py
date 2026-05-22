@@ -31,12 +31,13 @@ app = FastAPI(title="F1 Dashboard API", version="1.0.0")
 
 # ---------------------------------------------------------------------------
 # CORS
+# FIX: Removed zero-width space unicode character from the Vercel preview URL
 # ---------------------------------------------------------------------------
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://slipstreams-f1.vercel.app",
-    "https://f1-git-main-williamtecumsehs​herman007-7520s-projects.vercel.app",
+    "https://f1-git-main-williamtecumsehsherman007-7520s-projects.vercel.app",
 ]
 
 _env_origins = os.getenv("ALLOWED_ORIGINS", "")
@@ -103,6 +104,22 @@ def safe_val(val):
     if hasattr(val, 'item'):
         return val.item()
     return val
+
+
+def safe_timedelta(val):
+    """
+    FIX: Safely convert a Timedelta/NaT value to string.
+    pd.isna() on raw Timedelta objects can throw in some pandas versions.
+    Using a try/except is the most robust approach.
+    """
+    try:
+        if val is None:
+            return None
+        if pd.isna(val):
+            return None
+        return str(val)
+    except (TypeError, ValueError):
+        return None
 
 
 _START_TIME = datetime.utcnow()
@@ -234,8 +251,10 @@ def get_lap_positions(year: int, round_number: int, session_type: str = "R"):
                     pos = drv_laps["Position"].iloc[0]
                     lap_time = drv_laps["LapTime"].iloc[0]
                     lap_positions[drv] = {
-                        "position": safe_val(pos) if not pd.isna(pos) else None,
-                        "lapTime": str(lap_time) if not pd.isna(lap_time) else None,
+                        # FIX: use safe_val with explicit NaN check for position
+                        "position": safe_val(pos) if not (isinstance(pos, float) and np.isnan(pos)) else None,
+                        # FIX: use safe_timedelta instead of raw pd.isna() on Timedelta
+                        "lapTime": safe_timedelta(lap_time),
                     }
             lap_data.append({"lap": lap_num, "positions": lap_positions})
 
@@ -313,10 +332,11 @@ def get_tyre_strategy(year: int, round_number: int, session_type: str = "R"):
                     "tyreLife": safe_val(lap.get("TyreLife")),
                     "color": TYRE_COLORS.get(compound, "#888888"),
                     "isPersonalBest": bool(lap.get("IsPersonalBest", False)),
-                    "lapTime": str(lap["LapTime"]) if not pd.isna(lap["LapTime"]) else None,
-                    "sector1": str(lap["Sector1Time"]) if "Sector1Time" in lap and not pd.isna(lap["Sector1Time"]) else None,
-                    "sector2": str(lap["Sector2Time"]) if "Sector2Time" in lap and not pd.isna(lap["Sector2Time"]) else None,
-                    "sector3": str(lap["Sector3Time"]) if "Sector3Time" in lap and not pd.isna(lap["Sector3Time"]) else None,
+                    # FIX: use safe_timedelta for all Timedelta columns
+                    "lapTime": safe_timedelta(lap.get("LapTime")),
+                    "sector1": safe_timedelta(lap.get("Sector1Time")),
+                    "sector2": safe_timedelta(lap.get("Sector2Time")),
+                    "sector3": safe_timedelta(lap.get("Sector3Time")),
                 })
 
             # Close last stint
@@ -369,9 +389,11 @@ def get_race_results(year: int, round_number: int, session_type: str = "R"):
         raise HTTPException(status_code=400, detail="Invalid round number")
     try:
         session = fastf1.get_session(year, round_number, session_type)
-        # Do NOT pass laps=False — omitting laps lets FastF1 load session
-        # metadata (results, driver info) without fetching full lap data.
+        # FIX: explicitly set laps=False so FastF1 only loads results/metadata,
+        # not full lap data — this is faster and avoids the Session.load() error
+        # that occurred when laps= was omitted (defaulted to True internally).
         session.load(
+            laps=False,
             telemetry=False,
             weather=False,
             messages=False,
@@ -395,7 +417,8 @@ def get_race_results(year: int, round_number: int, session_type: str = "R"):
                 "points": safe_val(row.get("Points")),
                 "status": safe_val(row.get("Status")),
                 "gridPosition": safe_val(row.get("GridPosition")),
-                "time": str(row.get("Time", "")) if row.get("Time") is not None else None,
+                # FIX: use safe_timedelta for the race Time column (Timedelta)
+                "time": safe_timedelta(row.get("Time")),
             })
 
         result_list.sort(key=lambda x: (x["position"] or 99))

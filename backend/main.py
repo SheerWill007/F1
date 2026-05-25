@@ -2,11 +2,13 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import fastf1
+from fastf1.exceptions import DataNotLoadedError
 import pandas as pd
 import numpy as np
 from typing import Optional, List
 from datetime import datetime
 import os
+from threading import Lock
 import warnings
 import traceback
 import logging
@@ -142,6 +144,54 @@ def build_driver_name_lookup(laps: pd.DataFrame) -> dict:
 
 
 _START_TIME = datetime.utcnow()
+_LAP_LOAD_LOCK = Lock()
+
+
+def load_lap_session(year: int, round_number: int, session_type: str):
+    """Load timing data once at a time and retry without a potentially bad cache."""
+    with _LAP_LOAD_LOCK:
+        for bypass_cache in (False, True):
+            session = fastf1.get_session(year, round_number, session_type)
+            try:
+                if bypass_cache:
+                    logger.warning(
+                        "Retrying lap data without cache year=%s round=%s session=%s",
+                        year,
+                        round_number,
+                        session_type,
+                    )
+                    with fastf1.Cache.disabled():
+                        session.load(
+                            laps=True,
+                            telemetry=False,
+                            weather=False,
+                            messages=False,
+                        )
+                else:
+                    session.load(
+                        laps=True,
+                        telemetry=False,
+                        weather=False,
+                        messages=False,
+                    )
+                return session, session.laps
+            except DataNotLoadedError:
+                if bypass_cache:
+                    logger.exception(
+                        "Lap timing unavailable after cache-bypass retry "
+                        "year=%s round=%s session=%s",
+                        year,
+                        round_number,
+                        session_type,
+                    )
+
+    raise HTTPException(
+        status_code=503,
+        detail=(
+            "Lap timing data is unavailable from the FastF1 source. "
+            "The results endpoint may still be available."
+        ),
+    )
 
 # ---------------------------------------------------------------------------
 # Routes
@@ -240,15 +290,7 @@ def get_lap_positions(year: int, round_number: int, session_type: str = "R"):
     if round_number < 1 or round_number > 30:
         raise HTTPException(status_code=400, detail="Invalid round number")
     try:
-        session = fastf1.get_session(year, round_number, session_type)
-        session.load(
-            laps=True,
-            telemetry=False,
-            weather=False,
-            messages=False,
-        )
-
-        laps = session.laps
+        session, laps = load_lap_session(year, round_number, session_type)
         if laps is None or len(laps) == 0:
             raise HTTPException(status_code=404, detail="No lap data available")
 
@@ -323,15 +365,7 @@ def get_tyre_strategy(year: int, round_number: int, session_type: str = "R"):
     if round_number < 1 or round_number > 30:
         raise HTTPException(status_code=400, detail="Invalid round number")
     try:
-        session = fastf1.get_session(year, round_number, session_type)
-        session.load(
-            laps=True,
-            telemetry=False,
-            weather=False,
-            messages=False,
-        )
-
-        laps = session.laps
+        session, laps = load_lap_session(year, round_number, session_type)
         if laps is None or len(laps) == 0:
             raise HTTPException(status_code=404, detail="No lap data available")
 

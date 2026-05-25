@@ -22,7 +22,7 @@ warnings.filterwarnings("ignore")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logging.getLogger("fastf1").propagate = False
-fastf1.set_log_level("WARNING")
+fastf1.set_log_level(os.getenv("FASTF1_LOG_LEVEL", "ERROR"))
 
 # ---------------------------------------------------------------------------
 # FastF1 cache — /tmp is the correct writable path on Render

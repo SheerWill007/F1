@@ -12,7 +12,7 @@ import warnings
 import traceback
 import logging
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -31,7 +31,6 @@ app = FastAPI(title="F1 Dashboard API", version="1.0.0")
 
 # ---------------------------------------------------------------------------
 # CORS
-# FIX: Removed zero-width space unicode character from the Vercel preview URL
 # ---------------------------------------------------------------------------
 origins = [
     "http://localhost:3000",
@@ -56,7 +55,7 @@ app.add_middleware(
 # Team colors (2024 season)
 # ---------------------------------------------------------------------------
 TEAM_COLORS = {
-    "Red Bull Racing": "#3671C6",
+    "Red Bull Racing": "#18407A",
     "Ferrari": "#E8002D",
     "Mercedes": "#27F4D2",
     "McLaren": "#FF8000",
@@ -101,14 +100,14 @@ def safe_val(val):
         return float(val)
     if isinstance(val, pd.Timestamp):
         return str(val)
-    if hasattr(val, 'item'):
+    if hasattr(val, "item"):
         return val.item()
     return val
 
 
 def safe_timedelta(val):
     """
-    FIX: Safely convert a Timedelta/NaT value to string.
+    Safely convert a Timedelta/NaT value to string.
     pd.isna() on raw Timedelta objects can throw in some pandas versions.
     Using a try/except is the most robust approach.
     """
@@ -122,11 +121,33 @@ def safe_timedelta(val):
         return None
 
 
+def build_driver_name_lookup(laps: pd.DataFrame) -> dict:
+    """
+    Build a driver abbreviation -> full name lookup purely from laps data.
+    This avoids calling session.get_driver() which requires results/metadata
+    to be loaded and raises 'data not loaded yet' errors when only laps=True.
+    """
+    lookup = {}
+    drivers = laps["Driver"].unique().tolist()
+    for drv in drivers:
+        drv_laps = laps[laps["Driver"] == drv]
+        resolved = drv  # fallback to abbreviation
+        for col in ["FullName", "BroadcastName", "Driver"]:
+            if col in drv_laps.columns:
+                val = str(drv_laps[col].iloc[0])
+                if val and val not in ["nan", "None", ""]:
+                    resolved = val
+                    break
+        lookup[drv] = resolved
+    return lookup
+
+
 _START_TIME = datetime.utcnow()
 
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+
 
 @app.get("/")
 def root():
@@ -153,19 +174,24 @@ def get_seasons():
 def get_schedule(year: int):
     """Return the race schedule for a given year."""
     if year < 1950 or year > datetime.now().year + 1:
-        raise HTTPException(status_code=400, detail="Invalid year. Must be between 1950 and current year + 1")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid year. Must be between 1950 and current year + 1",
+        )
     try:
         schedule = fastf1.get_event_schedule(year, include_testing=False)
         races = []
         for _, row in schedule.iterrows():
-            races.append({
-                "round": safe_val(row.get("RoundNumber")),
-                "name": safe_val(row.get("EventName")),
-                "country": safe_val(row.get("Country")),
-                "location": safe_val(row.get("Location")),
-                "date": str(row.get("EventDate", ""))[:10],
-                "format": safe_val(row.get("EventFormat")),
-            })
+            races.append(
+                {
+                    "round": safe_val(row.get("RoundNumber")),
+                    "name": safe_val(row.get("EventName")),
+                    "country": safe_val(row.get("Country")),
+                    "location": safe_val(row.get("Location")),
+                    "date": str(row.get("EventDate", ""))[:10],
+                    "format": safe_val(row.get("EventFormat")),
+                }
+            )
         return {"year": year, "races": races}
     except Exception as e:
         logger.exception(f"get_schedule failed for year={year}: {e}")
@@ -179,7 +205,9 @@ def get_session_info(year: int, round_number: int):
     if year < 1950 or year > datetime.now().year + 1:
         raise HTTPException(status_code=400, detail="Invalid year")
     if round_number < 1 or round_number > 30:
-        raise HTTPException(status_code=400, detail="Invalid round number. Must be between 1 and 30")
+        raise HTTPException(
+            status_code=400, detail="Invalid round number. Must be between 1 and 30"
+        )
     try:
         event = fastf1.get_event(year, round_number)
         sessions = []
@@ -195,7 +223,9 @@ def get_session_info(year: int, round_number: int):
             "sessions": sessions,
         }
     except Exception as e:
-        logger.exception(f"get_session_info failed for year={year} round={round_number}: {e}")
+        logger.exception(
+            f"get_session_info failed for year={year} round={round_number}: {e}"
+        )
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -225,19 +255,25 @@ def get_lap_positions(year: int, round_number: int, session_type: str = "R"):
             raise HTTPException(status_code=404, detail="No lap data available")
 
         drivers = laps["Driver"].unique().tolist()
+
+        # FIX: build name lookup from laps data — avoids session.get_driver()
+        # which requires results metadata that isn't loaded with laps=True only.
+        driver_name_lookup = build_driver_name_lookup(laps)
+
         driver_info = {}
         for drv in drivers:
             drv_laps = laps[laps["Driver"] == drv]
-            team = drv_laps["Team"].iloc[0] if "Team" in drv_laps.columns else "Unknown"
-            try:
-                full_name = session.get_driver(drv)["FullName"]
-            except Exception:
-                full_name = drv
+            team = (
+                str(drv_laps["Team"].iloc[0])
+                if "Team" in drv_laps.columns
+                else "Unknown"
+            )
+            full_name = driver_name_lookup.get(drv, drv)
             driver_info[drv] = {
                 "code": drv,
-                "fullName": str(full_name),
-                "team": str(team),
-                "color": get_team_color(str(team)),
+                "fullName": full_name,
+                "team": team,
+                "color": get_team_color(team),
             }
 
         max_lap = int(laps["LapNumber"].max())
@@ -246,14 +282,18 @@ def get_lap_positions(year: int, round_number: int, session_type: str = "R"):
         for lap_num in range(1, max_lap + 1):
             lap_positions = {}
             for drv in drivers:
-                drv_laps = laps[(laps["Driver"] == drv) & (laps["LapNumber"] == lap_num)]
+                drv_laps = laps[
+                    (laps["Driver"] == drv) & (laps["LapNumber"] == lap_num)
+                ]
                 if len(drv_laps) > 0:
                     pos = drv_laps["Position"].iloc[0]
                     lap_time = drv_laps["LapTime"].iloc[0]
                     lap_positions[drv] = {
-                        # FIX: use safe_val with explicit NaN check for position
-                        "position": safe_val(pos) if not (isinstance(pos, float) and np.isnan(pos)) else None,
-                        # FIX: use safe_timedelta instead of raw pd.isna() on Timedelta
+                        "position": (
+                            safe_val(pos)
+                            if not (isinstance(pos, float) and np.isnan(pos))
+                            else None
+                        ),
                         "lapTime": safe_timedelta(lap_time),
                     }
             lap_data.append({"lap": lap_num, "positions": lap_positions})
@@ -270,7 +310,9 @@ def get_lap_positions(year: int, round_number: int, session_type: str = "R"):
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception(f"get_lap_positions failed year={year} round={round_number} session={session_type}: {e}")
+        logger.exception(
+            f"get_lap_positions failed year={year} round={round_number} session={session_type}: {e}"
+        )
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -297,6 +339,11 @@ def get_tyre_strategy(year: int, round_number: int, session_type: str = "R"):
             raise HTTPException(status_code=404, detail="No lap data available")
 
         drivers = laps["Driver"].unique().tolist()
+
+        # FIX: build name lookup from laps data — avoids session.get_driver()
+        # which raises 'data not loaded yet' when only laps=True is passed.
+        driver_name_lookup = build_driver_name_lookup(laps)
+
         driver_tyres = {}
 
         for drv in drivers:
@@ -316,45 +363,53 @@ def get_tyre_strategy(year: int, round_number: int, session_type: str = "R"):
 
                 if compound != prev_compound:
                     if prev_compound is not None and stint_start is not None:
-                        stints.append({
-                            "compound": prev_compound,
-                            "startLap": stint_start,
-                            "endLap": lap_num - 1,
-                            "laps": lap_num - stint_start,
-                            "color": TYRE_COLORS.get(prev_compound, "#888888"),
-                        })
+                        stints.append(
+                            {
+                                "compound": prev_compound,
+                                "startLap": stint_start,
+                                "endLap": lap_num - 1,
+                                "laps": lap_num - stint_start,
+                                "color": TYRE_COLORS.get(prev_compound, "#888888"),
+                            }
+                        )
                     stint_start = lap_num
                     prev_compound = compound
 
-                stint_data.append({
-                    "lap": lap_num,
-                    "compound": compound,
-                    "tyreLife": safe_val(lap.get("TyreLife")),
-                    "color": TYRE_COLORS.get(compound, "#888888"),
-                    "isPersonalBest": bool(lap.get("IsPersonalBest", False)),
-                    # FIX: use safe_timedelta for all Timedelta columns
-                    "lapTime": safe_timedelta(lap.get("LapTime")),
-                    "sector1": safe_timedelta(lap.get("Sector1Time")),
-                    "sector2": safe_timedelta(lap.get("Sector2Time")),
-                    "sector3": safe_timedelta(lap.get("Sector3Time")),
-                })
+                stint_data.append(
+                    {
+                        "lap": lap_num,
+                        "compound": compound,
+                        "tyreLife": safe_val(lap.get("TyreLife")),
+                        "color": TYRE_COLORS.get(compound, "#888888"),
+                        "isPersonalBest": bool(lap.get("IsPersonalBest", False)),
+                        "lapTime": safe_timedelta(lap.get("LapTime")),
+                        "sector1": safe_timedelta(lap.get("Sector1Time")),
+                        "sector2": safe_timedelta(lap.get("Sector2Time")),
+                        "sector3": safe_timedelta(lap.get("Sector3Time")),
+                    }
+                )
 
             # Close last stint
             if prev_compound is not None and stint_start is not None:
                 last_lap = safe_val(drv_laps["LapNumber"].max())
-                stints.append({
-                    "compound": prev_compound,
-                    "startLap": stint_start,
-                    "endLap": last_lap,
-                    "laps": last_lap - stint_start + 1,
-                    "color": TYRE_COLORS.get(prev_compound, "#888888"),
-                })
+                stints.append(
+                    {
+                        "compound": prev_compound,
+                        "startLap": stint_start,
+                        "endLap": last_lap,
+                        "laps": last_lap - stint_start + 1,
+                        "color": TYRE_COLORS.get(prev_compound, "#888888"),
+                    }
+                )
 
-            team = str(drv_laps["Team"].iloc[0]) if "Team" in drv_laps.columns else "Unknown"
-            try:
-                full_name = str(session.get_driver(drv)["FullName"])
-            except (KeyError, TypeError, AttributeError):
-                full_name = drv
+            team = (
+                str(drv_laps["Team"].iloc[0])
+                if "Team" in drv_laps.columns
+                else "Unknown"
+            )
+
+            # FIX: use lookup dict instead of session.get_driver()
+            full_name = driver_name_lookup.get(drv, drv)
 
             driver_tyres[drv] = {
                 "code": drv,
@@ -375,7 +430,9 @@ def get_tyre_strategy(year: int, round_number: int, session_type: str = "R"):
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception(f"get_tyre_strategy failed year={year} round={round_number} session={session_type}: {e}")
+        logger.exception(
+            f"get_tyre_strategy failed year={year} round={round_number} session={session_type}: {e}"
+        )
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -389,9 +446,6 @@ def get_race_results(year: int, round_number: int, session_type: str = "R"):
         raise HTTPException(status_code=400, detail="Invalid round number")
     try:
         session = fastf1.get_session(year, round_number, session_type)
-        # FIX: explicitly set laps=False so FastF1 only loads results/metadata,
-        # not full lap data — this is faster and avoids the Session.load() error
-        # that occurred when laps= was omitted (defaulted to True internally).
         session.load(
             laps=False,
             telemetry=False,
@@ -407,19 +461,20 @@ def get_race_results(year: int, round_number: int, session_type: str = "R"):
         result_list = []
         for _, row in results.iterrows():
             team = str(row.get("TeamName", "Unknown"))
-            result_list.append({
-                "position": safe_val(row.get("Position")),
-                "driverNumber": safe_val(row.get("DriverNumber")),
-                "code": safe_val(row.get("Abbreviation")),
-                "fullName": safe_val(row.get("FullName")),
-                "team": team,
-                "color": get_team_color(team),
-                "points": safe_val(row.get("Points")),
-                "status": safe_val(row.get("Status")),
-                "gridPosition": safe_val(row.get("GridPosition")),
-                # FIX: use safe_timedelta for the race Time column (Timedelta)
-                "time": safe_timedelta(row.get("Time")),
-            })
+            result_list.append(
+                {
+                    "position": safe_val(row.get("Position")),
+                    "driverNumber": safe_val(row.get("DriverNumber")),
+                    "code": safe_val(row.get("Abbreviation")),
+                    "fullName": safe_val(row.get("FullName")),
+                    "team": team,
+                    "color": get_team_color(team),
+                    "points": safe_val(row.get("Points")),
+                    "status": safe_val(row.get("Status")),
+                    "gridPosition": safe_val(row.get("GridPosition")),
+                    "time": safe_timedelta(row.get("Time")),
+                }
+            )
 
         result_list.sort(key=lambda x: (x["position"] or 99))
 
@@ -432,6 +487,8 @@ def get_race_results(year: int, round_number: int, session_type: str = "R"):
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception(f"get_race_results failed year={year} round={round_number} session={session_type}: {e}")
+        logger.exception(
+            f"get_race_results failed year={year} round={round_number} session={session_type}: {e}"
+        )
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

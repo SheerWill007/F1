@@ -2,7 +2,6 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import fastf1
-import fastf1.plotting
 import pandas as pd
 import numpy as np
 from typing import Optional, List

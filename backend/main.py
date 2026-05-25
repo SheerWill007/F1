@@ -246,7 +246,6 @@ def get_lap_positions(year: int, round_number: int, session_type: str = "R"):
             telemetry=False,
             weather=False,
             messages=False,
-            livedata=False,
         )
 
         laps = session.laps
@@ -330,7 +329,6 @@ def get_tyre_strategy(year: int, round_number: int, session_type: str = "R"):
             telemetry=False,
             weather=False,
             messages=False,
-            livedata=False,
         )
 
         laps = session.laps
@@ -450,7 +448,6 @@ def get_race_results(year: int, round_number: int, session_type: str = "R"):
             telemetry=False,
             weather=False,
             messages=False,
-            livedata=False,
         )
 
         results = session.results

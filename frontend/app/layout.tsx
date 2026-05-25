@@ -67,7 +67,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <div className="flex items-center gap-3">
                     <Show when="signed-out">
                       <span className="text-xs text-f1-silver uppercase tracking-widest">
-                        Free analysis preview
+                        All races free to view
                       </span>
                     </Show>
                     <Show when="signed-in">

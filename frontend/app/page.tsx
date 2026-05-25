@@ -177,14 +177,14 @@ export default function Home() {
         <div className="border border-f1-red/40 bg-f1-darkgray rounded-lg p-6 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5">
           <div className="space-y-2">
             <p className="text-xs text-f1-red font-bold uppercase tracking-widest">
-              Continue Your Analysis
+              Free Race Analysis
             </p>
             <h2 className="text-lg font-bold text-white">
-              Sign in to explore more races
+              Sign in to view every race
             </h2>
             <p className="text-sm text-f1-silver max-w-2xl">
-              You have viewed your free race analysis. Create a free account or
-              sign in with Clerk to load another session.
+              Every race and session is free to explore. Create a free account
+              or sign in to continue your analysis.
             </p>
           </div>
           <div className="flex items-center gap-3 shrink-0">

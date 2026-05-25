@@ -13,6 +13,8 @@ interface Props {
   onSessionChange: (s: string) => void;
   onLoad: () => void;
   loading: boolean;
+  accessReady: boolean;
+  requiresAuth: boolean;
 }
 
 const SESSION_TYPES = [
@@ -27,7 +29,8 @@ const SESSION_TYPES = [
 
 export default function RaceSelector({
   year, race, sessionType,
-  onYearChange, onRaceChange, onSessionChange, onLoad, loading
+  onYearChange, onRaceChange, onSessionChange, onLoad, loading,
+  accessReady, requiresAuth
 }: Props) {
   const [seasons, setSeasons] = useState<number[]>([]);
   const [schedule, setSchedule] = useState<Race[]>([]);
@@ -51,7 +54,10 @@ export default function RaceSelector({
       .finally(() => setScheduleLoading(false));
   };
 
+  // These effects intentionally fetch remote selector options when inputs change.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadSeasons(); }, []);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadSchedule(year); }, [year]);
 
   return (
@@ -145,7 +151,7 @@ export default function RaceSelector({
         {/* Load Button */}
         <button
           onClick={onLoad}
-          disabled={!race || loading}
+          disabled={!race || loading || !accessReady || requiresAuth}
           className="px-6 py-2 bg-f1-red text-white text-xs font-bold uppercase tracking-widest rounded border border-f1-red hover:bg-f1-red/80 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-2"
         >
           {loading ? (
@@ -153,6 +159,8 @@ export default function RaceSelector({
               <span className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" />
               Loading...
             </>
+          ) : requiresAuth ? (
+            'Sign In Below'
           ) : (
             'Load Session'
           )}

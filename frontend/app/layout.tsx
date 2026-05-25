@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { ClerkProvider, SignInButton, SignUpButton, Show, UserButton } from '@clerk/nextjs';
+import { ClerkProvider, Show, UserButton } from '@clerk/nextjs';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -63,19 +63,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                     </span>
                   </div>
 
-                  {/* Right: Auth Buttons */}
+                  {/* Right: Account status */}
                   <div className="flex items-center gap-3">
                     <Show when="signed-out">
-                      <SignInButton mode="modal">
-                        <button className="px-4 py-2 text-xs font-bold uppercase tracking-widest text-f1-silver hover:text-white border border-f1-gray/30 hover:border-f1-red/50 rounded transition-all">
-                          Sign In
-                        </button>
-                      </SignInButton>
-                      <SignUpButton mode="modal">
-                        <button className="px-4 py-2 text-xs font-bold uppercase tracking-widest text-white bg-f1-red hover:bg-f1-red/90 rounded transition-all">
-                          Sign Up
-                        </button>
-                      </SignUpButton>
+                      <span className="text-xs text-f1-silver uppercase tracking-widest">
+                        Free analysis preview
+                      </span>
                     </Show>
                     <Show when="signed-in">
                       <div className="flex items-center gap-3">

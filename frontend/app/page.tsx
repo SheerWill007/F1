@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { SignInButton, SignUpButton, useAuth } from '@clerk/nextjs';
+import { useState, useSyncExternalStore } from 'react';
 import { f1API } from '@/lib/api';
 import {
   Race,
@@ -17,8 +18,25 @@ import SessionHeader from '@/components/SessionHeader';
 import LoadingState from '@/components/LoadingState';
 
 type ActiveTab = 'positions' | 'tyres' | 'results';
+const GUEST_ANALYSIS_KEY = 'slipstreams_guest_analysis_viewed';
+const GUEST_ANALYSIS_EVENT = 'slipstreams-guest-analysis-viewed';
+
+function subscribeToGuestAnalysis(callback: () => void) {
+  window.addEventListener('storage', callback);
+  window.addEventListener(GUEST_ANALYSIS_EVENT, callback);
+
+  return () => {
+    window.removeEventListener('storage', callback);
+    window.removeEventListener(GUEST_ANALYSIS_EVENT, callback);
+  };
+}
+
+function getGuestAnalysisSnapshot() {
+  return window.localStorage.getItem(GUEST_ANALYSIS_KEY) === 'true';
+}
 
 export default function Home() {
+  const { isLoaded: authLoaded, isSignedIn } = useAuth();
   const [year, setYear] = useState(2024);
   const [race, setRace] = useState<Race | null>(null);
   const [sessionType, setSessionType] = useState('R');
@@ -41,9 +59,17 @@ export default function Home() {
 
   const [error, setError] =
     useState<string | null>(null);
+  const guestAnalysisViewed = useSyncExternalStore(
+    subscribeToGuestAnalysis,
+    getGuestAnalysisSnapshot,
+    () => false
+  );
+
+  const requiresAuth =
+    authLoaded && !isSignedIn && guestAnalysisViewed;
 
   const loadRaceData = async () => {
-    if (!race) return;
+    if (!race || !authLoaded || requiresAuth) return;
 
     setLoading(true);
     setError(null);
@@ -97,6 +123,16 @@ export default function Home() {
         setResultsData(results.value);
       }
 
+      const hasLoadedAnalysis =
+        positions.status === 'fulfilled' ||
+        tyres.status === 'fulfilled' ||
+        results.status === 'fulfilled';
+
+      if (hasLoadedAnalysis && !isSignedIn) {
+        window.localStorage.setItem(GUEST_ANALYSIS_KEY, 'true');
+        window.dispatchEvent(new Event(GUEST_ANALYSIS_EVENT));
+      }
+
       if (
         positions.status === 'rejected' &&
         tyres.status === 'rejected' &&
@@ -106,9 +142,9 @@ export default function Home() {
           'Failed to load session data'
         );
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(
-        err?.message ||
+        (err instanceof Error && err.message) ||
           'Failed to load race data'
       );
     } finally {
@@ -133,7 +169,38 @@ export default function Home() {
         onSessionChange={setSessionType}
         onLoad={loadRaceData}
         loading={loading}
+        accessReady={authLoaded}
+        requiresAuth={requiresAuth}
       />
+
+      {requiresAuth && (
+        <div className="border border-f1-red/40 bg-f1-darkgray rounded-lg p-6 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5">
+          <div className="space-y-2">
+            <p className="text-xs text-f1-red font-bold uppercase tracking-widest">
+              Continue Your Analysis
+            </p>
+            <h2 className="text-lg font-bold text-white">
+              Sign in to explore more races
+            </h2>
+            <p className="text-sm text-f1-silver max-w-2xl">
+              You have viewed your free race analysis. Create a free account or
+              sign in with Clerk to load another session.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <SignInButton mode="modal">
+              <button className="px-5 py-3 text-xs font-bold uppercase tracking-widest text-white border border-f1-gray/40 hover:border-f1-red rounded transition-all">
+                Sign In
+              </button>
+            </SignInButton>
+            <SignUpButton mode="modal">
+              <button className="px-5 py-3 text-xs font-bold uppercase tracking-widest text-white bg-f1-red hover:bg-f1-red/90 rounded transition-all">
+                Sign Up Free
+              </button>
+            </SignUpButton>
+          </div>
+        </div>
+      )}
 
       {loading && (
         <LoadingState

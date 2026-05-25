@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import fastf1
+import fastf1._api as fastf1_api
 from fastf1.exceptions import DataNotLoadedError
 import pandas as pd
 import numpy as np
@@ -27,6 +28,12 @@ logger = logging.getLogger(__name__)
 cache_dir = "/tmp/fastf1"
 os.makedirs(cache_dir, exist_ok=True)
 fastf1.Cache.enable_cache(cache_dir)
+
+timing_api_base_url = os.getenv(
+    "FASTF1_TIMING_API_BASE_URL",
+    "https://slipstreams-f1.vercel.app/api/timing",
+).rstrip("/")
+fastf1_api.base_url = timing_api_base_url
 
 app = FastAPI(title="F1 Dashboard API", version="1.0.0")
 
@@ -210,6 +217,7 @@ def health():
         "status": "healthy",
         "uptime_seconds": uptime_seconds,
         "cache_dir_exists": os.path.isdir(cache_dir),
+        "timing_api_base_url": timing_api_base_url,
     }
 
 

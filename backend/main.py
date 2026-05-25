@@ -21,6 +21,8 @@ warnings.filterwarnings("ignore")
 # ---------------------------------------------------------------------------
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+logging.getLogger("fastf1").propagate = False
+fastf1.set_log_level("WARNING")
 
 # ---------------------------------------------------------------------------
 # FastF1 cache — /tmp is the correct writable path on Render
@@ -184,7 +186,7 @@ def load_lap_session(year: int, round_number: int, session_type: str):
                 return session, session.laps
             except DataNotLoadedError:
                 if bypass_cache:
-                    logger.exception(
+                    logger.warning(
                         "Lap timing unavailable after cache-bypass retry "
                         "year=%s round=%s session=%s",
                         year,

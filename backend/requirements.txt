@@ -17,7 +17,7 @@ idna==3.7
 url-normalize==1.4.3
 
 # F1 data
-fastf1==3.5.3
+fastf1==3.8.3
 timple==0.1.8
 signalrcore==1.0.2
 websockets==12.0

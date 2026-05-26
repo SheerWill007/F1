@@ -3,9 +3,9 @@
 > **Formula 1 lap-by-lap race data, tyre strategy, and session analysis — all in one place.**
 
 Built by **WilliamBenLaw [AmanLaw]** for all the F1 fans out there.
-Powered by [FastF1](https://github.com/theOehrly/Fast-F1) · Hosted on [Vercel](https://vercel.com)
+Powered by [FastF1](https://github.com/theOehrly/Fast-F1) · Hosted on my own domain as a subdomain willx.tech =>f1.willx.tech
 
-🔗 **Live App:** [slipstreams-f1.vercel.app](https://slipstreams-f1.vercel.app)
+🔗 **Live App:** [f1.willx.tech]((https://f1.willx.tech/))
 
 ---
 

@@ -92,6 +92,7 @@ TYRE_COLORS = {
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def safe_val(val):
     """Convert numpy/pandas types to Python native types safely."""
     if val is None:
@@ -163,11 +164,14 @@ def load_lap_session(year: int, round_number: int, session_type: str):
                 if bypass_cache:
                     logger.warning(
                         "Retrying lap load without cache: year=%s round=%s session=%s",
-                        year, round_number, session_type,
+                        year,
+                        round_number,
+                        session_type,
                     )
                     ctx = fastf1.Cache.disabled()
                 else:
                     from contextlib import nullcontext
+
                     ctx = nullcontext()
 
                 with ctx:
@@ -185,7 +189,11 @@ def load_lap_session(year: int, round_number: int, session_type: str):
 
                 logger.info(
                     "Lap session loaded (attempt %d): year=%s round=%s session=%s rows=%d",
-                    attempt, year, round_number, session_type, len(laps),
+                    attempt,
+                    year,
+                    round_number,
+                    session_type,
+                    len(laps),
                 )
                 return session, laps
 
@@ -193,13 +201,20 @@ def load_lap_session(year: int, round_number: int, session_type: str):
                 last_exc = exc
                 logger.warning(
                     "Lap load attempt %d failed: year=%s round=%s session=%s — %s",
-                    attempt, year, round_number, session_type, exc,
+                    attempt,
+                    year,
+                    round_number,
+                    session_type,
+                    exc,
                 )
 
         # Both attempts failed — surface the real error to the caller.
         logger.error(
             "All lap load attempts exhausted: year=%s round=%s session=%s — %s",
-            year, round_number, session_type, last_exc,
+            year,
+            round_number,
+            session_type,
+            last_exc,
         )
         raise HTTPException(
             status_code=503,
@@ -213,6 +228,7 @@ def load_lap_session(year: int, round_number: int, session_type: str):
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+
 
 @app.get("/")
 def root():
@@ -243,14 +259,16 @@ def get_schedule(year: int):
         schedule = fastf1.get_event_schedule(year, include_testing=False)
         races = []
         for _, row in schedule.iterrows():
-            races.append({
-                "round":    safe_val(row.get("RoundNumber")),
-                "name":     safe_val(row.get("EventName")),
-                "country":  safe_val(row.get("Country")),
-                "location": safe_val(row.get("Location")),
-                "date":     str(row.get("EventDate", ""))[:10],
-                "format":   safe_val(row.get("EventFormat")),
-            })
+            races.append(
+                {
+                    "round": safe_val(row.get("RoundNumber")),
+                    "name": safe_val(row.get("EventName")),
+                    "country": safe_val(row.get("Country")),
+                    "location": safe_val(row.get("Location")),
+                    "date": str(row.get("EventDate", ""))[:10],
+                    "format": safe_val(row.get("EventFormat")),
+                }
+            )
         return {"year": year, "races": races}
     except Exception as e:
         logger.exception("get_schedule failed year=%s: %s", year, e)
@@ -272,13 +290,15 @@ def get_session_info(year: int, round_number: int):
             if name and str(name) not in ["None", ""]:
                 sessions.append({"number": i, "name": str(name)})
         return {
-            "year":     year,
-            "round":    round_number,
-            "event":    safe_val(event.get("EventName")),
+            "year": year,
+            "round": round_number,
+            "event": safe_val(event.get("EventName")),
             "sessions": sessions,
         }
     except Exception as e:
-        logger.exception("get_session_info failed year=%s round=%s: %s", year, round_number, e)
+        logger.exception(
+            "get_session_info failed year=%s round=%s: %s", year, round_number, e
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -298,12 +318,16 @@ def get_lap_positions(year: int, round_number: int, session_type: str = "R"):
         driver_info = {}
         for drv in drivers:
             drv_laps = laps[laps["Driver"] == drv]
-            team = str(drv_laps["Team"].iloc[0]) if "Team" in drv_laps.columns else "Unknown"
+            team = (
+                str(drv_laps["Team"].iloc[0])
+                if "Team" in drv_laps.columns
+                else "Unknown"
+            )
             driver_info[drv] = {
-                "code":     drv,
+                "code": drv,
                 "fullName": driver_name_lookup.get(drv, drv),
-                "team":     team,
-                "color":    get_team_color(team),
+                "team": team,
+                "color": get_team_color(team),
             }
 
         max_lap = int(laps["LapNumber"].max())
@@ -315,26 +339,33 @@ def get_lap_positions(year: int, round_number: int, session_type: str = "R"):
                 if len(rows) > 0:
                     pos = rows["Position"].iloc[0]
                     lap_positions[drv] = {
-                        "position": safe_val(pos) if not (isinstance(pos, float) and np.isnan(pos)) else None,
-                        "lapTime":  safe_timedelta(rows["LapTime"].iloc[0]),
+                        "position": (
+                            safe_val(pos)
+                            if not (isinstance(pos, float) and np.isnan(pos))
+                            else None
+                        ),
+                        "lapTime": safe_timedelta(rows["LapTime"].iloc[0]),
                     }
             lap_data.append({"lap": lap_num, "positions": lap_positions})
 
         return {
-            "year":        year,
-            "round":       round_number,
+            "year": year,
+            "round": round_number,
             "sessionType": session_type,
-            "event":       str(session.event["EventName"]),
-            "totalLaps":   max_lap,
-            "drivers":     driver_info,
-            "laps":        lap_data,
+            "event": str(session.event["EventName"]),
+            "totalLaps": max_lap,
+            "drivers": driver_info,
+            "laps": lap_data,
         }
     except HTTPException:
         raise
     except Exception as e:
         logger.exception(
             "get_lap_positions failed year=%s round=%s session=%s: %s",
-            year, round_number, session_type, e,
+            year,
+            round_number,
+            session_type,
+            e,
         )
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -368,62 +399,75 @@ def get_tyre_strategy(year: int, round_number: int, session_type: str = "R"):
 
                 if compound != prev_compound:
                     if prev_compound is not None and stint_start is not None:
-                        stints.append({
-                            "compound":  prev_compound,
-                            "startLap":  stint_start,
-                            "endLap":    lap_num - 1,
-                            "laps":      lap_num - stint_start,
-                            "color":     TYRE_COLORS.get(prev_compound, "#888888"),
-                        })
+                        stints.append(
+                            {
+                                "compound": prev_compound,
+                                "startLap": stint_start,
+                                "endLap": lap_num - 1,
+                                "laps": lap_num - stint_start,
+                                "color": TYRE_COLORS.get(prev_compound, "#888888"),
+                            }
+                        )
                     stint_start = lap_num
                     prev_compound = compound
 
-                stint_data.append({
-                    "lap":            lap_num,
-                    "compound":       compound,
-                    "tyreLife":       safe_val(lap.get("TyreLife")),
-                    "color":          TYRE_COLORS.get(compound, "#888888"),
-                    "isPersonalBest": bool(lap.get("IsPersonalBest", False)),
-                    "lapTime":        safe_timedelta(lap.get("LapTime")),
-                    "sector1":        safe_timedelta(lap.get("Sector1Time")),
-                    "sector2":        safe_timedelta(lap.get("Sector2Time")),
-                    "sector3":        safe_timedelta(lap.get("Sector3Time")),
-                })
+                stint_data.append(
+                    {
+                        "lap": lap_num,
+                        "compound": compound,
+                        "tyreLife": safe_val(lap.get("TyreLife")),
+                        "color": TYRE_COLORS.get(compound, "#888888"),
+                        "isPersonalBest": bool(lap.get("IsPersonalBest", False)),
+                        "lapTime": safe_timedelta(lap.get("LapTime")),
+                        "sector1": safe_timedelta(lap.get("Sector1Time")),
+                        "sector2": safe_timedelta(lap.get("Sector2Time")),
+                        "sector3": safe_timedelta(lap.get("Sector3Time")),
+                    }
+                )
 
             # Close the final stint
             if prev_compound is not None and stint_start is not None:
                 last_lap = safe_val(drv_laps["LapNumber"].max())
-                stints.append({
-                    "compound": prev_compound,
-                    "startLap": stint_start,
-                    "endLap":   last_lap,
-                    "laps":     last_lap - stint_start + 1,
-                    "color":    TYRE_COLORS.get(prev_compound, "#888888"),
-                })
+                stints.append(
+                    {
+                        "compound": prev_compound,
+                        "startLap": stint_start,
+                        "endLap": last_lap,
+                        "laps": last_lap - stint_start + 1,
+                        "color": TYRE_COLORS.get(prev_compound, "#888888"),
+                    }
+                )
 
-            team = str(drv_laps["Team"].iloc[0]) if "Team" in drv_laps.columns else "Unknown"
+            team = (
+                str(drv_laps["Team"].iloc[0])
+                if "Team" in drv_laps.columns
+                else "Unknown"
+            )
             driver_tyres[drv] = {
-                "code":     drv,
+                "code": drv,
                 "fullName": driver_name_lookup.get(drv, drv),
-                "team":     team,
-                "color":    get_team_color(team),
-                "stints":   stints,
-                "laps":     stint_data,
+                "team": team,
+                "color": get_team_color(team),
+                "stints": stints,
+                "laps": stint_data,
             }
 
         return {
-            "year":        year,
-            "round":       round_number,
+            "year": year,
+            "round": round_number,
             "sessionType": session_type,
-            "event":       str(session.event["EventName"]),
-            "drivers":     driver_tyres,
+            "event": str(session.event["EventName"]),
+            "drivers": driver_tyres,
         }
     except HTTPException:
         raise
     except Exception as e:
         logger.exception(
             "get_tyre_strategy failed year=%s round=%s session=%s: %s",
-            year, round_number, session_type, e,
+            year,
+            round_number,
+            session_type,
+            e,
         )
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
@@ -452,25 +496,27 @@ def get_race_results(year: int, round_number: int, session_type: str = "R"):
         result_list = []
         for _, row in results.iterrows():
             team = str(row.get("TeamName", "Unknown"))
-            result_list.append({
-                "position":     safe_val(row.get("Position")),
-                "driverNumber": safe_val(row.get("DriverNumber")),
-                "code":         safe_val(row.get("Abbreviation")),
-                "fullName":     safe_val(row.get("FullName")),
-                "team":         team,
-                "color":        get_team_color(team),
-                "points":       safe_val(row.get("Points")),
-                "status":       safe_val(row.get("Status")),
-                "gridPosition": safe_val(row.get("GridPosition")),
-                "time":         safe_timedelta(row.get("Time")),
-            })
+            result_list.append(
+                {
+                    "position": safe_val(row.get("Position")),
+                    "driverNumber": safe_val(row.get("DriverNumber")),
+                    "code": safe_val(row.get("Abbreviation")),
+                    "fullName": safe_val(row.get("FullName")),
+                    "team": team,
+                    "color": get_team_color(team),
+                    "points": safe_val(row.get("Points")),
+                    "status": safe_val(row.get("Status")),
+                    "gridPosition": safe_val(row.get("GridPosition")),
+                    "time": safe_timedelta(row.get("Time")),
+                }
+            )
 
         result_list.sort(key=lambda x: (x["position"] or 99))
 
         return {
-            "year":    year,
-            "round":   round_number,
-            "event":   str(session.event["EventName"]),
+            "year": year,
+            "round": round_number,
+            "event": str(session.event["EventName"]),
             "results": result_list,
         }
     except HTTPException:
@@ -478,7 +524,10 @@ def get_race_results(year: int, round_number: int, session_type: str = "R"):
     except Exception as e:
         logger.exception(
             "get_race_results failed year=%s round=%s session=%s: %s",
-            year, round_number, session_type, e,
+            year,
+            round_number,
+            session_type,
+            e,
         )
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

@@ -18,10 +18,10 @@ warnings.filterwarnings("ignore")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logging.getLogger("fastf1").propagate = False
-fastf1.set_log_level(os.getenv("FASTF1_LOG_LEVEL", "ERROR"))
+fastf1.set_log_level(os.getenv("FASTF1_LOG_LEVEL", "WARNING"))
 
 # ---------------------------------------------------------------------------
-# FastF1 cache — /tmp is the correct writable path on Render
+# FastF1 cache
 # ---------------------------------------------------------------------------
 cache_dir = "/tmp/fastf1"
 os.makedirs(cache_dir, exist_ok=True)
@@ -53,7 +53,7 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# Team colors (2024 season)
+# Team colors (2024/2025/2026 seasons)
 # ---------------------------------------------------------------------------
 TEAM_COLORS = {
     "Red Bull Racing": "#18407A",
@@ -67,7 +67,6 @@ TEAM_COLORS = {
     "Kick Sauber": "#52E252",
     "Haas F1 Team": "#B6BABD",
 }
-
 TEAM_COLOR_FALLBACK = "#FFFFFF"
 
 
@@ -94,7 +93,6 @@ TYRE_COLORS = {
 
 
 def safe_val(val):
-    """Convert numpy/pandas types to Python native types safely."""
     if val is None:
         return None
     if isinstance(val, float) and np.isnan(val):
@@ -111,7 +109,6 @@ def safe_val(val):
 
 
 def safe_timedelta(val):
-    """Safely convert a Timedelta/NaT value to string."""
     try:
         if val is None:
             return None
@@ -123,10 +120,6 @@ def safe_timedelta(val):
 
 
 def build_driver_name_lookup(laps: pd.DataFrame) -> dict:
-    """
-    Build driver abbreviation -> full name lookup purely from laps DataFrame.
-    Avoids session.get_driver() which needs results metadata loaded separately.
-    """
     lookup = {}
     for drv in laps["Driver"].unique().tolist():
         drv_laps = laps[laps["Driver"] == drv]
@@ -141,33 +134,62 @@ def build_driver_name_lookup(laps: pd.DataFrame) -> dict:
     return lookup
 
 
+def _extract_laps(session) -> pd.DataFrame:
+    """
+    Safely extract laps from a loaded session.
+
+    FastF1 sometimes completes session.load() without error but leaves the
+    internal laps store unset — accessing session.laps then raises
+    'data not loaded yet'. We catch that here and return None so callers
+    can decide what to do.
+    """
+    try:
+        laps = session.laps
+        if laps is None or len(laps) == 0:
+            return None
+        return laps
+    except Exception:
+        return None
+
+
 _START_TIME = datetime.utcnow()
 _LAP_LOAD_LOCK = Lock()
 
 
 def load_lap_session(year: int, round_number: int, session_type: str):
     """
-    Load a session with laps=True. Serialised via a lock so concurrent requests
-    don't saturate the FastF1 download threads.
+    Load a session with lap data.
 
-    Strategy:
-      1. Try with cache enabled (fast path for already-cached races).
-      2. On ANY exception, retry once with the cache disabled (handles corrupt
-         cache entries and network-level errors from the Ergast fallback).
-      3. If both attempts fail, raise HTTP 503 with the actual error message so
-         the frontend can show a meaningful error instead of a silent blank.
+    Attempt order:
+      1. Normal load with cache enabled.
+      2. Reload the session object + load with cache disabled (handles corrupt
+         cache entries).
+      3. Reload + cache disabled + pick=True (forces a fresh network fetch on
+         some FastF1 versions that support it).
+
+    On every attempt we call _extract_laps() AFTER load() so that the
+    'data not loaded yet' error is caught here rather than propagating up.
     """
     with _LAP_LOAD_LOCK:
         last_exc = None
-        for attempt, bypass_cache in enumerate((False, True), start=1):
+
+        attempts = [
+            {"bypass_cache": False, "label": "cached"},
+            {"bypass_cache": True, "label": "cache-bypass"},
+        ]
+
+        for attempt in attempts:
+            label = attempt["label"]
             try:
-                if bypass_cache:
-                    logger.warning(
-                        "Retrying lap load without cache: year=%s round=%s session=%s",
-                        year,
-                        round_number,
-                        session_type,
-                    )
+                logger.info(
+                    "Lap load [%s]: year=%s round=%s session=%s",
+                    label,
+                    year,
+                    round_number,
+                    session_type,
+                )
+
+                if attempt["bypass_cache"]:
                     ctx = fastf1.Cache.disabled()
                 else:
                     from contextlib import nullcontext
@@ -181,36 +203,40 @@ def load_lap_session(year: int, round_number: int, session_type: str):
                         telemetry=False,
                         weather=False,
                         messages=False,
+                        livedata=False,
                     )
 
-                laps = session.laps
-                if laps is None or len(laps) == 0:
-                    raise ValueError("Session loaded but laps DataFrame is empty.")
+                laps = _extract_laps(session)
+                if laps is not None:
+                    logger.info(
+                        "Lap load succeeded [%s]: year=%s round=%s session=%s rows=%d",
+                        label,
+                        year,
+                        round_number,
+                        session_type,
+                        len(laps),
+                    )
+                    return session, laps
 
-                logger.info(
-                    "Lap session loaded (attempt %d): year=%s round=%s session=%s rows=%d",
-                    attempt,
-                    year,
-                    round_number,
-                    session_type,
-                    len(laps),
+                # load() returned cleanly but laps is still empty/inaccessible
+                last_exc = RuntimeError(
+                    f"session.load() completed [{label}] but session.laps is empty or inaccessible."
                 )
-                return session, laps
+                logger.warning(str(last_exc))
 
             except Exception as exc:
                 last_exc = exc
                 logger.warning(
-                    "Lap load attempt %d failed: year=%s round=%s session=%s — %s",
-                    attempt,
+                    "Lap load [%s] raised exception: year=%s round=%s session=%s — %s",
+                    label,
                     year,
                     round_number,
                     session_type,
                     exc,
                 )
 
-        # Both attempts failed — surface the real error to the caller.
         logger.error(
-            "All lap load attempts exhausted: year=%s round=%s session=%s — %s",
+            "All lap load attempts failed: year=%s round=%s session=%s — %s",
             year,
             round_number,
             session_type,
@@ -219,7 +245,8 @@ def load_lap_session(year: int, round_number: int, session_type: str):
         raise HTTPException(
             status_code=503,
             detail=(
-                f"Lap timing data could not be loaded after 2 attempts. "
+                f"Lap timing data could not be loaded for {year} round {round_number}. "
+                f"This race may not have lap data available yet (e.g. live/very recent race). "
                 f"Underlying error: {last_exc}"
             ),
         )
@@ -246,13 +273,11 @@ def health():
 
 @app.get("/api/seasons")
 def get_seasons():
-    """Return available seasons (2018 – current year)."""
     return {"seasons": list(range(2018, datetime.now().year + 1))}
 
 
 @app.get("/api/schedule/{year}")
 def get_schedule(year: int):
-    """Return the race schedule for a given year."""
     if year < 1950 or year > datetime.now().year + 1:
         raise HTTPException(status_code=400, detail="Invalid year.")
     try:
@@ -277,7 +302,6 @@ def get_schedule(year: int):
 
 @app.get("/api/session/{year}/{round_number}")
 def get_session_info(year: int, round_number: int):
-    """Return available sessions for a round."""
     if year < 1950 or year > datetime.now().year + 1:
         raise HTTPException(status_code=400, detail="Invalid year.")
     if round_number < 1 or round_number > 30:
@@ -304,7 +328,6 @@ def get_session_info(year: int, round_number: int):
 
 @app.get("/api/race/{year}/{round_number}/positions")
 def get_lap_positions(year: int, round_number: int, session_type: str = "R"):
-    """Return lap-by-lap position data for all drivers."""
     if year < 1950 or year > datetime.now().year + 1:
         raise HTTPException(status_code=400, detail="Invalid year.")
     if round_number < 1 or round_number > 30:
@@ -373,7 +396,6 @@ def get_lap_positions(year: int, round_number: int, session_type: str = "R"):
 
 @app.get("/api/race/{year}/{round_number}/tyres")
 def get_tyre_strategy(year: int, round_number: int, session_type: str = "R"):
-    """Return tyre compound and stint data for all drivers."""
     if year < 1950 or year > datetime.now().year + 1:
         raise HTTPException(status_code=400, detail="Invalid year.")
     if round_number < 1 or round_number > 30:
@@ -425,7 +447,6 @@ def get_tyre_strategy(year: int, round_number: int, session_type: str = "R"):
                     }
                 )
 
-            # Close the final stint
             if prev_compound is not None and stint_start is not None:
                 last_lap = safe_val(drv_laps["LapNumber"].max())
                 stints.append(
@@ -475,7 +496,6 @@ def get_tyre_strategy(year: int, round_number: int, session_type: str = "R"):
 
 @app.get("/api/race/{year}/{round_number}/results")
 def get_race_results(year: int, round_number: int, session_type: str = "R"):
-    """Return final race results."""
     if year < 1950 or year > datetime.now().year + 1:
         raise HTTPException(status_code=400, detail="Invalid year.")
     if round_number < 1 or round_number > 30:
@@ -487,6 +507,7 @@ def get_race_results(year: int, round_number: int, session_type: str = "R"):
             telemetry=False,
             weather=False,
             messages=False,
+            livedata=False,
         )
 
         results = session.results

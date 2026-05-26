@@ -47,6 +47,7 @@ origins = [
     "http://127.0.0.1:3000",
     "https://slipstreams-f1.vercel.app",
     "https://f1-git-main-williamtecumsehsherman007-7520s-projects.vercel.app",
+    "https://f1.willx.tech",
 ]
 
 _env_origins = os.getenv("ALLOWED_ORIGINS", "")

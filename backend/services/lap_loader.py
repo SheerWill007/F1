@@ -10,18 +10,34 @@ from services.fastf1_service import _extract_laps
 logger = logging.getLogger(__name__)
 _LAP_LOAD_LOCK = Lock()
 
+# In-memory cache — survives across requests within the same server session
+# Prevents re-downloading the same race data multiple times (positions + tyres = 1 download)
+_SESSION_CACHE: dict = {}
+
+
+def _cache_key(year: int, round_number: int, session_type: str) -> str:
+    return f"{year}_{round_number}_{session_type}"
+
 
 def load_lap_session(year: int, round_number: int, session_type: str):
     """
     Load a session with lap data.
 
     Attempt order:
-      1. Normal load with cache enabled.
-      2. Reload with cache disabled (handles corrupt cache entries).
+      1. Memory cache — instant if same race was already loaded this session.
+      2. Normal load with FastF1 disk cache enabled.
+      3. Reload with cache disabled (handles corrupt cache entries).
 
     Uses _extract_laps() after every load() to safely catch
     'data not loaded yet' errors rather than letting them propagate.
     """
+    key = _cache_key(year, round_number, session_type)
+
+    # Return immediately from memory if already loaded this server session
+    if key in _SESSION_CACHE:
+        logger.info("Lap load [memory-cache]: %s", key)
+        return _SESSION_CACHE[key]
+
     acquired = _LAP_LOAD_LOCK.acquire(timeout=60)
     if not acquired:
         raise HTTPException(
@@ -30,6 +46,11 @@ def load_lap_session(year: int, round_number: int, session_type: str):
         )
 
     try:
+        # Re-check inside lock — another request may have loaded it while we waited
+        if key in _SESSION_CACHE:
+            logger.info("Lap load [memory-cache, post-lock]: %s", key)
+            return _SESSION_CACHE[key]
+
         last_exc = None
 
         attempts = [
@@ -74,6 +95,8 @@ def load_lap_session(year: int, round_number: int, session_type: str):
                         session_type,
                         len(laps),
                     )
+                    # Store in memory so positions + tyres share one download
+                    _SESSION_CACHE[key] = (session, laps)
                     return session, laps
 
                 last_exc = RuntimeError(

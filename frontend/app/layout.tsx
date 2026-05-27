@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { ClerkProvider, Show, UserButton } from '@clerk/nextjs';
 import './globals.css';
+import KeepAlive from '@/components/KeepAlive';
 
 export const metadata: Metadata = {
   title: 'F1 Race Analysis Dashboard',
@@ -14,6 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="antialiased bg-f1-black text-f1-white font-mono">
+        <KeepAlive />
         <ClerkProvider
           appearance={{
             baseTheme: undefined,
@@ -106,25 +108,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-f1-silver">
                   <div className="flex items-center gap-2">
                     <span>Powered by</span>
-                    <a
-                      href="https://github.com/theOehrly/Fast-F1"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-f1-red hover:text-f1-red/80 font-bold transition-colors"
+
+                    href="https://github.com/theOehrly/Fast-F1"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-f1-red hover:text-f1-red/80 font-bold transition-colors"
                     >
-                      FastF1
-                    </a>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-f1-gray">|</span>
-                    <span>© Made By WilliamBenLaw [AmanLaw] for all the F1 fans out there!</span>
-                  </div>
+                    FastF1
+                  </a>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="text-f1-gray">|</span>
+                  <span>© Made By WilliamBenLaw [AmanLaw] for all the F1 fans out there!</span>
                 </div>
               </div>
-            </footer>
           </div>
-        </ClerkProvider>
-      </body>
-    </html>
+        </footer>
+      </div>
+    </ClerkProvider>
+      </body >
+    </html >
   );
 }

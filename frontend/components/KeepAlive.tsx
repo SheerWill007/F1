@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { startKeepAlive } from "@/utlis/keepAlive";
+import { startKeepAlive } from "@/utils/keepAlive";
 
 export default function KeepAlive() {
     useEffect(() => {

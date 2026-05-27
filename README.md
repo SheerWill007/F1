@@ -1,195 +1,137 @@
-# 🏎️ Slipstreams — F1 Race Analysis Dashboard
+# Slipstreams — F1 Race Analysis Dashboard
 
-> **Formula 1 lap-by-lap race data, tyre strategy, and session analysis — all in one place.**
+Formula 1 lap-by-lap race data, tyre strategy, and session analysis — all in one place.
 
-Built by **WilliamBenLaw [AmanLaw]** for all the F1 fans out there.
-Powered by [FastF1](https://github.com/theOehrly/Fast-F1) · Hosted on my own domain as a subdomain willx.tech =>f1.willx.tech
-
-🔗 **Live App:** [f1.willx.tech]((https://f1.willx.tech/))
+Built by **William Law II** · Powered by [FastF1](https://github.com/theOehrly/Fast-F1) · [f1.willx.tech](https://f1.willx.tech)
 
 ---
 
-## 📖 What Is Slipstreams?
+## Overview
 
-Slipstreams is a **web-based Formula 1 data analysis dashboard** that lets you explore race sessions visually — no coding or data science experience needed. Whether you want to see how a driver gained positions lap-by-lap, understand tyre strategy, or compare qualifying times, Slipstreams puts the data at your fingertips.
-
-Think of it as your personal F1 data room, powered by the same race telemetry data that teams use.
+Slipstreams is a web-based Formula 1 data analysis dashboard that lets you explore race sessions visually — no coding or data science experience required. Whether you want to trace how a driver gained positions lap-by-lap, break down tyre strategy, or review qualifying times, Slipstreams puts the data at your fingertips.
 
 ---
 
-## ✨ Features
+## Features
 
-- 📊 **Lap-by-lap position charts** — See how every driver moved through the field across a full race
-- 🔴🟡⬜ **Tyre strategy visualizer** — Understand each driver's compound choices and pit stop timing
-- ⏱️ **Session support** — Analyse Race, Qualifying, Sprint, Sprint Qualifying, FP1, FP2, and FP3
-- 🏁 **Full season coverage** — Browse any season and Grand Prix available in the FastF1 dataset
-- 🔐 **User accounts** — Sign in / Sign up to save your preferences and sessions
-- ⚡ **Fast & clean UI** — Minimal, responsive design that works on desktop and mobile
-
----
-
-## 🚀 Getting Started (For Non-Technical Users)
-
-No installation needed! Slipstreams runs entirely in your browser.
-
-### Step 1 — Open the App
-
-Go to 👉 **[https://slipstreams-f1.vercel.app](https://slipstreams-f1.vercel.app)**
-
-You'll land on the main dashboard. It looks like this:
-
-```
-┌────────────────────────────────────────────┐
-│  🏎️  F1 Race Analysis Dashboard  v1.0      │
-│  ─────────────────────────────────────── │
-│  Season: [  2024  ▼ ]                     │
-│  Grand Prix: [ — Select Race — ▼ ]        │
-│  Session: [ Race ▼ ]                      │
-│                                            │
-│       [ Load Session ]                    │
-└────────────────────────────────────────────┘
-```
+- **Lap-by-lap position charts** — Visualise every driver's movement through the field across a full race distance
+- **Tyre strategy visualiser** — Understand compound choices and pit stop timing for every driver
+- **Full session support** — Race, Qualifying, Sprint, Sprint Qualifying, FP1, FP2, and FP3
+- **Full season coverage** — Browse any season and Grand Prix available in the FastF1 dataset
+- **User accounts** — Sign in to save preferences and session history
+- **Responsive UI** — Clean, minimal design optimised for both desktop and mobile
 
 ---
 
-### Step 2 — (Optional) Create an Account
+## Usage
 
-Click **Sign Up** in the top-right corner to create a free account. This lets you save your analysis history and preferences. Already have one? Click **Sign In**.
+No installation required. The app runs entirely in your browser at [f1.willx.tech](https://f1.willx.tech).
 
----
+### 1. Select a Session
 
-### Step 3 — Choose Your Race
+Use the three dropdowns on the main dashboard to choose a season, Grand Prix, and session type (Race, Qualifying, FP1, etc.).
 
-Use the three dropdowns to pick what you want to analyse:
+### 2. Load the Data
 
-| Dropdown | What to Select |
-|---|---|
-| **Season** | The year (e.g. 2024, 2023…) |
-| **Grand Prix** | The race weekend (e.g. Monaco, Silverstone…) |
-| **Session** | Race, Qualifying, FP1, FP2, FP3, Sprint, or Sprint Q |
+Click **Load Session**. The app fetches and processes data from FastF1. Initial loads may take several seconds depending on session size.
 
----
+### 3. Explore the Charts
 
-### Step 4 — Load the Session
+**Position Chart** — A line graph showing each driver's race position per lap. Useful for identifying overtakes, Safety Car periods, and strategy plays.
 
-Click the **"Load Session"** button. The app will fetch data from FastF1 and render your charts. This may take a few seconds depending on the session size.
+**Tyre Strategy** — A horizontal bar chart showing compound choices and pit windows for every driver. Hover over any element for lap-level detail.
 
 ---
 
-### Step 5 — Explore the Charts
+## Local Development
 
-Once loaded, you'll see:
+**Requirements:** Node.js 18+, Python 3.9+
 
-- **Position Chart** — A line graph showing every driver's race position on each lap. Great for spotting overtakes, Safety Car periods, and strategic battles.
-- **Tyre Strategy** — A horizontal bar chart showing which tyre compound each driver ran and when they pitted.
-
-Hover over any line or bar for detailed information on that lap or stint.
-
----
-
-## 🛠️ For Developers — Local Setup
-
-> **Requirements:** Node.js 18+, Python 3.9+, npm
-
-### 1. Clone the Repository
+### Setup
 
 ```bash
-git clone https://github.com/AmanLaw/slipstreams-f1.git
+# Clone the repository
+git clone https://github.com/sheerwill007/slipstreams-f1.git
 cd slipstreams-f1
-```
 
-### 2. Install Frontend Dependencies
-
-```bash
+# Install frontend dependencies
 npm install
-```
 
-### 3. Install Backend / FastF1 Dependencies
+# Install backend dependencies
+pip install fastf1 fastapi uvicorn
 
-```bash
-pip install fastf1 flask flask-cors
-```
-
-### 4. Run the Development Server
-
-```bash
-# Start the backend API
-python app.py
+# Start the backend
+uvicorn backend.main:app --reload --port 8000
 
 # In a separate terminal, start the frontend
 npm run dev
 ```
 
-### 5. Open in Browser
-
-```
-http://localhost:3000
-```
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## 🧰 Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| **Frontend** | React / Next.js |
-| **Styling** | Tailwind CSS |
-| **Hosting** | Vercel |
-| **Data Engine** | [FastF1](https://github.com/theOehrly/Fast-F1) (Python) |
-| **Charts** | Recharts / D3 |
-| **Auth** | Supabase / Firebase (Sign In / Sign Up) |
+| Frontend | Next.js / React |
+| Styling | Tailwind CSS |
+| Frontend Hosting | Vercel |
+| Backend | FastAPI (Python) |
+| Data Engine | FastF1 |
+| Charts | Recharts / D3 |
+| Auth | Clerk |
+| Backend Hosting | Render |
 
 ---
 
-## 📦 Deployment
+## Deployment
 
-The app is deployed automatically via **Vercel** on every push to `main`.
+The frontend deploys automatically via Vercel on every push to `main`.
 
-To deploy your own fork:
+To deploy your own instance:
 
-1. Fork this repository on GitHub
-2. Go to [vercel.com](https://vercel.com) and click **"New Project"**
-3. Import your forked repo
-4. Set any required environment variables (API keys, backend URL)
-5. Click **Deploy** ✅
-
----
-
-## 🗺️ Roadmap
-
-- [ ] Driver telemetry comparisons (speed traces, throttle/brake)
-- [ ] Lap time delta charts
-- [ ] Head-to-head driver comparison mode
-- [ ] Dark/light theme toggle
-- [ ] Mobile-optimised chart interactions
-- [ ] Export charts as PNG/PDF
+1. Fork this repository
+2. Import the fork into [Vercel](https://vercel.com)
+3. Set the required environment variable: `NEXT_PUBLIC_API_URL` pointing to your backend
+4. Deploy the backend to Render by connecting the same repository and setting the start command to `uvicorn backend.main:app --host 0.0.0.0 --port $PORT --workers 1`
 
 ---
 
-## 🤝 Contributing
+## Roadmap
 
-Pull requests are welcome! For major changes, please open an issue first to discuss what you'd like to change.
-
-1. Fork the project
-2. Create your feature branch: `git checkout -b feature/my-feature`
-3. Commit your changes: `git commit -m 'Add my feature'`
-4. Push to branch: `git push origin feature/my-feature`
-5. Open a Pull Request
+- Driver telemetry comparisons (speed traces, throttle and brake inputs)
+- Lap time delta charts
+- Head-to-head driver comparison mode
+- Mobile-optimised chart interactions
+- Export charts as PNG or PDF
 
 ---
 
-## 📄 License
+## Contributing
 
-This project is open source and available under the [MIT License](LICENSE).
+Pull requests are welcome. For significant changes, open an issue first to discuss the proposed approach.
+
+```bash
+git checkout -b feature/your-feature
+git commit -m "Add your feature"
+git push origin feature/your-feature
+# Then open a Pull Request
+```
 
 ---
 
-## 🙏 Credits
+## Credits
 
-- **Data:** [FastF1](https://github.com/theOehrly/Fast-F1) by Oehrly — the open-source Python library that makes F1 telemetry data accessible
-- **Built by:** WilliamBenLaw [AmanLaw]
-- **For:** Every F1 fan who wants to go deeper than the broadcast 🏁
+Race and telemetry data provided by [FastF1](https://github.com/theOehrly/Fast-F1), the open-source Python library by Oehrly that makes F1 timing data accessible.
 
 ---
 
-*© Slipstreams F1 · Made with ❤️ for the F1 community*
+## License
+
+MIT License. See [LICENSE](LICENSE) for details.
+
+---
+
+*Built by William Law II for every F1 fan who wants to go deeper than the broadcast.*

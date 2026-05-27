@@ -17,13 +17,19 @@ def load_lap_session(year: int, round_number: int, session_type: str):
 
     Attempt order:
       1. Normal load with cache enabled.
-      2. Reload the session object + load with cache disabled (handles corrupt
-         cache entries).
+      2. Reload with cache disabled (handles corrupt cache entries).
 
-    On every attempt we call _extract_laps() AFTER load() so that the
-    'data not loaded yet' error is caught here rather than propagating up.
+    Uses _extract_laps() after every load() to safely catch
+    'data not loaded yet' errors rather than letting them propagate.
     """
-    with _LAP_LOAD_LOCK:
+    acquired = _LAP_LOAD_LOCK.acquire(timeout=60)
+    if not acquired:
+        raise HTTPException(
+            status_code=503,
+            detail="Server is busy loading another session. Please retry in a moment.",
+        )
+
+    try:
         last_exc = None
 
         attempts = [
@@ -55,7 +61,7 @@ def load_lap_session(year: int, round_number: int, session_type: str):
                         telemetry=False,
                         weather=False,
                         messages=False,
-                        livedata=False,
+                        # livedata param removed — blocks lap loading in FastF1 3.8.x
                     )
 
                 laps = _extract_laps(session)
@@ -94,10 +100,13 @@ def load_lap_session(year: int, round_number: int, session_type: str):
             last_exc,
         )
         raise HTTPException(
-            status_code=503,
+            status_code=404,
             detail=(
-                f"Lap timing data could not be loaded for {year} round {round_number}. "
-                f"This race may not have lap data available yet (e.g. live/very recent race). "
+                f"Lap data unavailable for {year} round {round_number} ({session_type}). "
+                f"The race may be upcoming, live, or not yet published. "
                 f"Underlying error: {last_exc}"
             ),
         )
+
+    finally:
+        _LAP_LOAD_LOCK.release()

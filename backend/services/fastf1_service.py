@@ -1,8 +1,12 @@
+import logging
+
 import fastf1
 import pandas as pd
 
+logger = logging.getLogger(__name__)
 
-def _extract_laps(session) -> pd.DataFrame:
+
+def _extract_laps(session) -> pd.DataFrame | None:
     """
     Safely extract laps from a loaded session.
 
@@ -10,13 +14,22 @@ def _extract_laps(session) -> pd.DataFrame:
     internal laps store unset — accessing session.laps then raises
     'data not loaded yet'. We catch that here and return None so callers
     can decide what to do.
+
+    Returns ALL laps (not just accurate) so position trace charts
+    have complete data including pit laps and safety car laps.
     """
     try:
         laps = session.laps
+
         if laps is None or len(laps) == 0:
+            logger.warning("_extract_laps: session.laps is None or empty.")
             return None
+
+        logger.debug("_extract_laps: returning %d laps.", len(laps))
         return laps
-    except Exception:
+
+    except Exception as e:
+        logger.warning("_extract_laps: failed to access session.laps — %s", e)
         return None
 
 

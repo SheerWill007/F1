@@ -1,4 +1,4 @@
-# Slipstreams — F1 Race Analysis Dashboard
+F1 - Race Analysis Dashboard
 
 Formula 1 lap-by-lap race data, tyre strategy, and session analysis — all in one place.
 
